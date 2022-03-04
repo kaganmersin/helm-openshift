@@ -1,0 +1,72 @@
+{{- if .Values.deploymentconfig.enabled -}}
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.metadata.namespace }}
+  labels:
+    {{- include "<sample>.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    {{- include "<sample>.selectorLabels" . | nindent 4 }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "<sample>.selectorLabels" . | nindent 8 }}
+        {{- include "<sample>.ePUPodlabels" . | nindent 8 }}
+    spec:
+      {{- toYaml .Values.pod.spec | nindent 6 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Release.Name }}
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.envvariables.enabled }}
+          env:
+          {{- .Values.envvariables.javaEnv  | nindent 10 }}
+          {{- end }}
+          {{- if .Values.secretref.enabled }}
+          envFrom:
+          - secretRef:
+              name: {{ .Values.secretref.secretrefname  }}
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.pod.ports }}
+              protocol: {{ .Values.service.ports.protocol }}
+              name: {{ .Values.service.ports.name }}
+          {{- if .Values.probes.livenessProbeEnabled }}
+          livenessProbe:
+            {{- tpl (toYaml .Values.probes.livenessProbe) . | nindent 12 }}
+          {{- end }} 
+          {{- if .Values.probes.readinessProbeEnabled }}
+          readinessProbe:
+            {{- tpl (toYaml .Values.probes.readinessProbe) . | nindent 12 }}
+          {{- end }}   
+          {{- if .Values.probes.startupProbeEnabled }}
+          startupProbe:
+            {{- tpl (toYaml .Values.probes.startupProbe) . | nindent 12 }} 
+          {{- end }}              
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.volumes.enabled }}
+          volumeMounts:
+            {{- tpl (toYaml .Values.volumes.volumeMounts) . | nindent 12 }}  
+          {{- end }} 
+      {{- if .Values.volumes.enabled }}       
+      volumes:
+        {{- tpl (toYaml .Values.volumes.volumeDefinition) . | nindent 8 }}
+      {{- end }}
+{{- end }}
